@@ -10,6 +10,7 @@ build/
 *.log
 .claude/
 .cc-workbench/
+access.db
 轨迹/
 录屏/
 视频/

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>云阶大厦 · 门禁卡发放与离场回收系统</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>门禁卡管理台</h1>
+    <small>楼宇门禁卡发放与离场回收系统</small>
+  </div>
+  <div class="spacer"></div>
+  <span class="device-pill">
+    <span id="device-dot" class="dot on"></span>
+    <span id="device-text">设备在线</span>
+    <span class="muted" id="device-pending"></span>
+  </span>
+  <button class="btn sm" id="btn-device-off">置为离线</button>
+  <button class="btn sm primary" id="btn-device-sync">恢复并补传</button>
+  <label class="role-box">岗位
+    <select id="role-select">
+      <option value="admin">管理员 · 林岚</option>
+      <option value="clerk_a" selected>A柜台 · 沈括</option>
+      <option value="clerk_b">B柜台 · 周知音</option>
+      <option value="auditor">审计员 · 顾审计</option>
+    </select>
+  </label>
+  <label class="role-box"><input type="checkbox" id="reveal-check"> 显示明文</label>
+</header>
+
+<nav class="tabs" id="tabs">
+  <div class="tab active" data-page="people">人员台账</div>
+  <div class="tab" data-page="cards">门禁卡库存</div>
+  <div class="tab" data-page="groups">权限组</div>
+  <div class="tab" data-page="issue">发卡回收</div>
+  <div class="tab" data-page="lost">挂失处理</div>
+  <div class="tab" data-page="audit">审计查询</div>
+</nav>
+
+<main>
+  <!-- 人员台账 -->
+  <section class="page active" id="page-people">
+    <div class="kpi-row" id="people-kpi"></div>
+    <div class="card-panel">
+      <div class="flex-between">
+        <div><h2>人员台账</h2><div class="sub">人员与租户门牌绑定；证件号、电话默认部分遮挡</div></div>
+      </div>
+      <div id="people-table"></div>
+    </div>
+  </section>
+
+  <!-- 门禁卡库存 -->
+  <section class="page" id="page-cards">
+    <div class="kpi-row" id="cards-kpi"></div>
+    <div class="card-panel">
+      <div class="flex-between">
+        <div><h2>门禁卡库存</h2>
+          <div class="sub">色带：<b style="color:var(--blue)">蓝=可用</b> ·
+            <b style="color:var(--red)">红=挂失</b> ·
+            <b style="color:var(--amber)">琥珀=待回收/损坏</b> ·
+            <b style="color:var(--violet)">紫=到期</b> · 灰=已回收</div></div>
+        <select id="card-filter">
+          <option value="">全部状态</option>
+          <option value="available">可用</option>
+          <option value="issued">待激活</option>
+          <option value="lost">挂失</option>
+          <option value="damaged">损坏待回收</option>
+          <option value="expired">到期失效</option>
+          <option value="revoked">已回收</option>
+        </select>
+      </div>
+      <div class="card-grid" id="card-grid" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <!-- 权限组 -->
+  <section class="page" id="page-groups">
+    <div class="card-panel">
+      <h2>楼层权限矩阵</h2>
+      <div class="sub">按权限组 × 楼层展示；蓝格=当前时段可通行，琥珀=非允许时段，灰格=规则不在生效日期</div>
+      <div class="legend">
+        <span><i style="background:var(--blue)"></i>当前可通行</span>
+        <span><i style="background:var(--amber-soft);border:1px solid #ecd2a3"></i>楼层有权限但非当前时段</span>
+        <span><i style="background:var(--slate-100)"></i>超出规则生效日期</span>
+        <span><i style="background:repeating-linear-gradient(45deg,#fff,#fff 5px,#f6f8fb 5px,#f6f8fb 10px)"></i>无权限</span>
+      </div>
+      <div class="matrix-wrap" id="floor-matrix"></div>
+    </div>
+
+    <div class="section-title">权限组规则维护<span class="muted">（仅管理员；修改已有楼层规则需二次确认）</span></div>
+    <div class="card-panel">
+      <div class="form-row">
+        <div class="field"><label>权限组</label><select id="rule-group"></select></div>
+        <div class="field"><label>楼层</label><input id="rule-floor" type="number" min="1" max="12" style="min-width:80px"></div>
+        <div class="field"><label>开始时段</label><input id="rule-start" type="time" value="09:00"></div>
+        <div class="field"><label>结束时段</label><input id="rule-end" type="time" value="18:00"></div>
+        <div class="field"><label>生效起</label><input id="rule-from" type="date"></div>
+        <div class="field"><label>生效止</label><input id="rule-to" type="date"></div>
+        <button class="btn primary" id="btn-save-rule">保存规则</button>
+      </div>
+      <div id="rule-confirm" style="display:none" class="confirm-box">
+        <b>⚠ 二次确认：</b>该楼层已存在规则，保存将覆盖现有时段/日期并影响在持卡片。
+        <div style="margin-top:10px"><button class="btn primary sm" id="btn-confirm-rule">确认覆盖</button>
+        <button class="btn sm" id="btn-cancel-rule">取消</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 发卡回收 -->
+  <section class="page" id="page-issue">
+    <div class="card-panel">
+      <h2>发卡柜台 · 两步发卡</h2>
+      <div class="sub">门禁卡必须绑定人员与权限组；第一步核对预填单，第二步确认发放并写入设备</div>
+      <div class="stepper">
+        <div class="step active" id="step-1"><b>1</b>填写发卡单</div>
+        <div class="step-line"></div>
+        <div class="step" id="step-2"><b>2</b>核对并确认</div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>柜台</label>
+          <select id="issue-counter"><option>A柜台</option><option>B柜台</option></select></div>
+        <div class="field"><label>卡号</label><input id="issue-no" placeholder="如 AC-4001" class="mono"></div>
+        <div class="field"><label>持卡人员</label><select id="issue-person"></select></div>
+        <div class="field"><label>权限组</label><select id="issue-group"></select></div>
+        <div class="field"><label>卡片类型</label>
+          <select id="issue-type"><option value="regular">正式卡</option><option value="temp">临时卡</option></select></div>
+        <div class="field" id="expire-field" style="display:none"><label>临时卡到期时间</label>
+          <input id="issue-expire" type="datetime-local"></div>
+        <button class="btn primary" id="btn-issue-prepare">第一步 · 核对</button>
+      </div>
+      <div id="issue-preview" style="display:none"></div>
+    </div>
+
+    <div class="section-title">门禁通行仿真（验证 楼层 × 时段 × 日期 权限）</div>
+    <div class="card-panel">
+      <div class="form-row">
+        <div class="field"><label>卡片</label><select id="sim-card"></select></div>
+        <div class="field"><label>进入楼层</label><input id="sim-floor" type="number" min="1" max="12" style="min-width:80px"></div>
+        <div class="field"><label>模拟时间（留空=现在）</label><input id="sim-at" type="datetime-local"></div>
+        <button class="btn" id="btn-sim">刷卡验证</button>
+      </div>
+      <div id="sim-result"></div>
+    </div>
+
+    <div class="section-title">离场回收</div>
+    <div class="card-panel">
+      <div class="sub">回收时先冻结权限，再记录回收前卡片状态；人员无在持卡时自动标记离场</div>
+      <div class="form-row">
+        <div class="field"><label>在持卡</label><select id="recycle-card"></select></div>
+        <div class="field"><label>回收原因</label><input id="recycle-reason" value="租户离场" style="min-width:220px"></div>
+        <button class="btn danger" id="btn-recycle">冻结并回收</button>
+      </div>
+      <div id="recycle-table" style="margin-top:16px"></div>
+    </div>
+  </section>
+
+  <!-- 挂失处理 -->
+  <section class="page" id="page-lost">
+    <div class="kpi-row" id="lost-kpi"></div>
+    <div class="card-panel">
+      <h2>挂失 / 补卡</h2>
+      <div class="sub">挂失即时冻结权限；挂失卡不能通过补录原卡号恢复，只能换发新卡，新卡保留与旧卡的替换关系</div>
+      <div class="form-row">
+        <div class="field"><label>在持/挂失卡</label><select id="lost-card"></select></div>
+        <button class="btn warn" id="btn-lost">登记挂失</button>
+      </div>
+      <div class="form-row" style="margin-top:14px">
+        <div class="field"><label>挂失旧卡</label><select id="reissue-card"></select></div>
+        <div class="field"><label>补领新卡号（不可与旧号相同）</label><input id="reissue-no" class="mono" style="min-width:190px"></div>
+        <button class="btn primary" id="btn-reissue">补领新卡</button>
+      </div>
+    </div>
+    <div class="card-panel" style="margin-top:16px">
+      <h2>损坏登记 / 借用转交</h2>
+      <div class="form-row" style="margin-top:6px">
+        <div class="field"><label>卡片</label><select id="damage-card"></select></div>
+        <button class="btn warn" id="btn-damage">登记损坏</button>
+      </div>
+      <div class="form-row" style="margin-top:14px">
+        <div class="field"><label>借用卡片</label><select id="transfer-card"></select></div>
+        <div class="field"><label>转交人员</label><select id="transfer-person"></select></div>
+        <button class="btn" id="btn-transfer">确认转交</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 审计查询 -->
+  <section class="page" id="page-audit">
+    <div class="card-panel">
+      <div class="flex-between">
+        <div><h2>审计事件</h2><div class="sub">发卡、挂失、补卡拒绝、权限越界、设备离线/补传、回收、到期等全程留痕</div></div>
+        <select id="event-filter"><option value="">全部事件</option></select>
+      </div>
+      <div id="event-list" style="margin-top:10px"></div>
+    </div>
+    <div class="card-panel" style="margin-top:16px">
+      <h2>回收记录</h2>
+      <div id="audit-recycles" style="margin-top:8px"></div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
